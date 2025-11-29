@@ -1,0 +1,6 @@
+{
+  "name": "RadioRu Browser",
+  "homeassistant": "2023.2.0",
+  "render_readme": false,
+  "country": "RU"
+}
