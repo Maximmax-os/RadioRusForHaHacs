@@ -1,5 +1,5 @@
 {
-  "domain": "radioru_browser",
+  "domain": "RuRadioHomeAssist",
   "name": "RadioRu Browser",
   "codeowners": ["@maxim"],
   "config_flow": true,
