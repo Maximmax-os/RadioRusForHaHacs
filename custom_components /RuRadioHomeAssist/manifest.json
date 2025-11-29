@@ -1,7 +1,7 @@
 {
   "domain": "radioru_browser",
   "name": "RadioRu Browser",
-  "codeowners": ["@"],
+  "codeowners": ["@maxim"],
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/404",
   "integration_type": "service",
