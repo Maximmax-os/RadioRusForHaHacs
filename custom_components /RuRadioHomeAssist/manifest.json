@@ -6,6 +6,7 @@
   "documentation": "https://www.home-assistant.io/integrations/404",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Maximmax-os/RadioRusForHaHacs/issues",
   "requirements": ["radios==0.3.2", "pycountry==24.6.1"],
   "single_config_entry": true
 }
