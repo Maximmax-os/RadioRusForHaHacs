@@ -135,35 +135,16 @@ class RadioMediaSource(MediaSource):
         self, radios: RadioBrowser, item: MediaSourceItem
     ) -> list[BrowseMediaSource]:
         """Handle browsing radio stations by country."""
-        category, _, country_code = (item.identifier or "").partition("/")
-        if category == "country" and country_code:
+        # Only show Russian stations
+        if not item.identifier:
             stations = await radios.stations(
                 filter_by=FilterBy.COUNTRY_CODE_EXACT,
-                filter_term=country_code,
+                filter_term='RU',  # Russia country code
                 hide_broken=True,
                 order=Order.NAME,
                 reverse=False,
             )
             return self._async_build_stations(radios, stations)
-
-        # We show country in the root additionally, when there is no item
-        if not item.identifier or category == "country":
-            # Trigger the lazy loading of the country database to happen inside the executor
-            await self.hass.async_add_executor_job(lambda: len(pycountry.countries))
-            countries = await radios.countries(order=Order.NAME)
-            return [
-                BrowseMediaSource(
-                    domain=DOMAIN,
-                    identifier=f"country/{country.code}",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_type=MediaType.MUSIC,
-                    title=country.name,
-                    can_play=False,
-                    can_expand=True,
-                    thumbnail=country.favicon,
-                )
-                for country in countries
-            ]
 
         return []
 
@@ -171,45 +152,16 @@ class RadioMediaSource(MediaSource):
         self, radios: RadioBrowser, item: MediaSourceItem
     ) -> list[BrowseMediaSource]:
         """Handle browsing radio stations by language."""
-        category, _, language = (item.identifier or "").partition("/")
-        if category == "language" and language:
+        # Only show Russian language stations
+        if not item.identifier:
             stations = await radios.stations(
                 filter_by=FilterBy.LANGUAGE_EXACT,
-                filter_term=language,
+                filter_term='russian',  # Russian language
                 hide_broken=True,
                 order=Order.NAME,
                 reverse=False,
             )
             return self._async_build_stations(radios, stations)
-
-        if category == "language":
-            languages = await radios.languages(order=Order.NAME, hide_broken=True)
-            return [
-                BrowseMediaSource(
-                    domain=DOMAIN,
-                    identifier=f"language/{language.name.lower()}",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_type=MediaType.MUSIC,
-                    title=language.name,
-                    can_play=False,
-                    can_expand=True,
-                    thumbnail=language.favicon,
-                )
-                for language in languages
-            ]
-
-        if not item.identifier:
-            return [
-                BrowseMediaSource(
-                    domain=DOMAIN,
-                    identifier="language",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_type=MediaType.MUSIC,
-                    title="By Language",
-                    can_play=False,
-                    can_expand=True,
-                )
-            ]
 
         return []
 
@@ -217,27 +169,17 @@ class RadioMediaSource(MediaSource):
         self, radios: RadioBrowser, item: MediaSourceItem
     ) -> list[BrowseMediaSource]:
         """Handle browsing popular radio stations."""
-        if item.identifier == "popular":
+        if not item.identifier:
+            # Popular Russian stations
             stations = await radios.stations(
+                filter_by=FilterBy.COUNTRY_CODE_EXACT,
+                filter_term='RU',  # Russia country code
                 hide_broken=True,
                 limit=250,
                 order=Order.CLICK_COUNT,
                 reverse=True,
             )
             return self._async_build_stations(radios, stations)
-
-        if not item.identifier:
-            return [
-                BrowseMediaSource(
-                    domain=DOMAIN,
-                    identifier="popular",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_type=MediaType.MUSIC,
-                    title="Popular",
-                    can_play=False,
-                    can_expand=True,
-                )
-            ]
 
         return []
 
@@ -247,6 +189,7 @@ class RadioMediaSource(MediaSource):
         """Handle browsing radio stations by tags."""
         category, _, tag = (item.identifier or "").partition("/")
         if category == "tag" and tag:
+            # Stations by tag filtered for Russia
             stations = await radios.stations(
                 filter_by=FilterBy.TAG_EXACT,
                 filter_term=tag,
@@ -254,26 +197,40 @@ class RadioMediaSource(MediaSource):
                 order=Order.NAME,
                 reverse=False,
             )
-            return self._async_build_stations(radios, stations)
+            # Filter stations to only include Russian ones
+            russian_stations = [s for s in stations if s.countrycode == 'RU' or 'russian' in (s.language or '').lower()]
+            return self._async_build_stations(radios, russian_stations)
 
         if category == "tag":
-            tags = await radios.tags(
+            # Get popular tags from Russian stations
+            stations = await radios.stations(
+                filter_by=FilterBy.COUNTRY_CODE_EXACT,
+                filter_term='RU',
                 hide_broken=True,
-                limit=100,
-                order=Order.STATION_COUNT,
-                reverse=True,
             )
-
-            # Now we have the top tags, reorder them by name
-            tags.sort(key=lambda tag: tag.name)
+            
+            # Collect unique tags from Russian stations
+            tag_count = {}
+            for station in stations:
+                if station.tags:
+                    for tag in station.tags.split(','):
+                        tag = tag.strip()
+                        if tag:
+                            tag_count[tag] = tag_count.get(tag, 0) + 1
+            
+            # Convert to list and sort by count
+            tags = [{"name": tag, "stationcount": count} for tag, count in tag_count.items()]
+            tags.sort(key=lambda x: x["stationcount"], reverse=True)
+            tags = tags[:100]  # Limit to top 100 tags
+            tags.sort(key=lambda x: x["name"])  # Sort by name
 
             return [
                 BrowseMediaSource(
                     domain=DOMAIN,
-                    identifier=f"tag/{tag.name}",
+                    identifier=f"tag/{tag['name']}",
                     media_class=MediaClass.DIRECTORY,
                     media_content_type=MediaType.MUSIC,
-                    title=tag.name.title(),
+                    title=tag['name'].title(),
                     can_play=False,
                     can_expand=True,
                 )
@@ -303,6 +260,7 @@ class RadioMediaSource(MediaSource):
             for station in stations
             if station.latitude is not None
             and station.longitude is not None
+            and station.countrycode == 'RU'  # Only Russian stations
             and (
                 (
                     dist := vincenty(
@@ -321,11 +279,11 @@ class RadioMediaSource(MediaSource):
     ) -> list[BrowseMediaSource]:
         """Handle browsing local radio stations."""
 
-        if item.identifier == "local":
-            country = self.hass.config.country
+        if not item.identifier:
+            # Get Russian stations and filter by location
             stations = await radios.stations(
                 filter_by=FilterBy.COUNTRY_CODE_EXACT,
-                filter_term=country,
+                filter_term='RU',  # Only Russian stations
                 hide_broken=True,
                 order=Order.NAME,
                 reverse=False,
@@ -339,18 +297,5 @@ class RadioMediaSource(MediaSource):
             )
 
             return self._async_build_stations(radios, local_stations)
-
-        if not item.identifier:
-            return [
-                BrowseMediaSource(
-                    domain=DOMAIN,
-                    identifier="local",
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_type=MediaType.MUSIC,
-                    title="Local stations",
-                    can_play=False,
-                    can_expand=True,
-                )
-            ]
 
         return []
