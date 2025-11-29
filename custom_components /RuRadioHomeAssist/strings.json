@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "description": "Do you want to add Radio Browser to Home Assistant?"
+        "description": "Do you want to add RadioRu Browser to Home Assistant?"
       }
     }
   }
